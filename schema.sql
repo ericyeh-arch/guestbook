@@ -6,6 +6,22 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+-- 由伺服器端記錄留言者 IP(從 PostgREST 請求標頭取得,前端無法偽造)
+alter table public.messages add column if not exists ip text;
+
+create or replace function public.set_message_ip() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare h json;
+begin
+  begin h := current_setting('request.headers', true)::json; exception when others then h := null; end;
+  new.ip := nullif(trim(coalesce(split_part(h->>'x-forwarded-for', ',', 1), h->>'cf-connecting-ip', '')), '');
+  return new;
+end $$;
+
+drop trigger if exists messages_set_ip on public.messages;
+create trigger messages_set_ip before insert on public.messages
+  for each row execute function public.set_message_ip();
+
 grant usage on schema public to anon;
 grant select, insert on public.messages to anon;
 

@@ -55,6 +55,8 @@
   .head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
   .name{font-weight:600}
   time{font-size:.8rem;color:var(--muted)}
+  .ip{font-size:.75rem;color:var(--muted);background:var(--bg);border:1px solid var(--line);
+    padding:0 8px;border-radius:999px;font-family:ui-monospace,Consolas,monospace}
   .text{margin:4px 0 0;white-space:pre-wrap;word-break:break-word}
   .empty{text-align:center;padding:40px 16px;color:var(--muted)}
   .empty b{display:block;font-size:2rem;margin-bottom:4px}
@@ -150,6 +152,7 @@
       const t = document.createElement('time'); t.dateTime = m.created_at;
       t.textContent = ago(m.created_at); t.title = new Date(m.created_at).toLocaleString('zh-TW');
       head.append(n, t);
+      if (m.ip) { const ip = document.createElement('span'); ip.className = 'ip'; ip.textContent = 'IP ' + m.ip; head.append(ip); }
       const p = document.createElement('p'); p.className = 'text'; p.textContent = m.content; // 避免 XSS
       body.append(head, p); el.append(av, body); list.append(el);
     }
