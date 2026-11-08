@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工讀生打卡</title>
+<style>
+  :root{--bg:#f4f6f8;--surface:#fff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;
+    --in:#10b981;--out:#f59e0b;--danger:#dc2626;--brand:#2563eb}
+  @media (prefers-color-scheme:dark){:root{--bg:#0b0f14;--surface:#131a22;--text:#e8edf3;--muted:#8a97a8;--line:#222c37}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  header{text-align:center;padding:32px 16px 8px}
+  #clock{font-size:clamp(2.4rem,9vw,4rem);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  #date{color:var(--muted)}
+  main{max-width:760px;margin:0 auto;padding:16px}
+  .hint{text-align:center;color:var(--muted);margin:8px 0 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .w{background:var(--surface);border:2px solid var(--line);border-radius:16px;padding:18px 10px;cursor:pointer;
+    font:inherit;color:inherit;text-align:center;transition:transform .08s,border-color .15s}
+  .w:hover{border-color:var(--brand)} .w:active{transform:scale(.97)}
+  .w .n{font-size:1.2rem;font-weight:600;display:block;word-break:break-all}
+  .w .s{display:inline-block;margin-top:8px;font-size:.8rem;padding:2px 10px;border-radius:999px;background:var(--line);color:var(--muted)}
+  .w.on{border-color:var(--in)} .w.on .s{background:var(--in);color:#fff}
+  .w.miss{border-color:var(--out)} .w.miss .s{background:var(--out);color:#fff}
+  .warn{color:var(--out);font-weight:600}
+  .empty{text-align:center;color:var(--muted);padding:40px 0}
+  dialog{border:0;border-radius:20px;padding:24px;width:min(92vw,340px);background:var(--surface);color:var(--text);box-shadow:0 20px 60px #0006}
+  dialog::backdrop{background:#0008}
+  dialog h2{margin:0 0 4px;text-align:center}
+  .act{text-align:center;color:var(--muted);margin-bottom:12px}
+  #dots{display:flex;justify-content:center;gap:10px;height:20px;margin-bottom:12px}
+  #dots i{width:14px;height:14px;border-radius:50%;background:var(--line)} #dots i.f{background:var(--brand)}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pad button{font:inherit;font-size:1.5rem;padding:14px 0;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:inherit;cursor:pointer}
+  .pad button:active{background:var(--line)}
+  .pad .ok{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .pad button:disabled{opacity:.5}
+  #err{color:var(--danger);text-align:center;min-height:1.5em;margin-top:10px;font-size:.9rem}
+  .cancel{display:block;margin:10px auto 0;background:none;border:0;color:var(--muted);cursor:pointer;font:inherit}
+  #result{position:fixed;inset:0;display:none;place-items:center;text-align:center;color:#fff;z-index:20}
+  #result.show{display:grid} #result.in{background:var(--in)} #result.out{background:var(--out)}
+  #result b{display:block;font-size:clamp(2rem,8vw,3.4rem)} #result span{font-size:1.2rem;opacity:.95}
+  footer{text-align:center;padding:24px;font-size:.85rem}
+  footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<header><div id="clock">--:--:--</div><div id="date"></div></header>
+<main>
+  <p class="hint">請點選你的名字,輸入 PIN 碼打卡</p>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>尚無工讀生,請管理員先到後台新增</div>
+</main>
+<footer><a href="admin.html">管理後台</a></footer>
+
+<dialog id="dlg">
+  <h2 id="dname"></h2>
+  <div class="act" id="dact"></div>
+  <div id="dots"></div>
+  <div class="pad" id="pad"></div>
+  <div id="err"></div>
+  <button class="cancel" id="cancel" type="button">取消</button>
+</dialog>
+<div id="result"><div><b id="rmain"></b><span id="rsub"></span></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://yhdqsqnbjqznrjcpoeei.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_rVeSI1olnmwCet3IIwgMOg_NInzHB0l';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = id => document.getElementById(id);
+  let cur = null, pin = '', busy = false;
+
+  // 即時時鐘
+  function tick() {
+    const d = new Date();
+    $('clock').textContent = d.toLocaleTimeString('zh-TW', { hour12: false });
+    $('date').textContent = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  }
+  setInterval(tick, 1000); tick();
+
+  async function loadWorkers() {
+    const { data, error } = await db.rpc('list_workers');
+    if (error) { $('grid').textContent = '讀取失敗:' + error.message; return; }
+    $('grid').replaceChildren();
+    $('empty').hidden = data.length > 0;
+    for (const w of data) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'w' + (w.clocked_in ? ' on' : w.missed ? ' miss' : '');
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = w.name;
+      const s = document.createElement('span'); s.className = 's';
+      s.textContent = w.clocked_in ? '上班中' : w.missed ? '上次未下班' : '未上班';
+      b.append(n, s); b.onclick = () => openPad(w); $('grid').append(b);
+    }
+  }
+
+  // PIN 數字鍵盤
+  const keys = ['1','2','3','4','5','6','7','8','9','⌫','0','✓'];
+  for (const k of keys) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = k;
+    if (k === '✓') b.className = 'ok';
+    b.onclick = () => press(k); $('pad').append(b);
+  }
+  function drawDots() {
+    $('dots').replaceChildren();
+    for (let i = 0; i < Math.max(4, pin.length); i++) { const d = document.createElement('i'); if (i < pin.length) d.className = 'f'; $('dots').append(d); }
+  }
+  function openPad(w) {
+    cur = w; pin = ''; $('err').textContent = '';
+    $('dname').textContent = w.name;
+    const act = $('dact'); act.className = 'act';
+    if (w.clocked_in) act.textContent = '本次動作:下班打卡';
+    else if (w.missed) { act.textContent = '上次忘記打下班卡,本次視為上班打卡(請通知管理員補登)'; act.classList.add('warn'); }
+    else act.textContent = '本次動作:上班打卡';
+    drawDots(); $('dlg').showModal();
+  }
+  function press(k) {
+    if (busy) return;
+    if (k === '⌫') pin = pin.slice(0, -1);
+    else if (k === '✓') return submit();
+    else if (pin.length < 8) pin += k;
+    $('err').textContent = ''; drawDots();
+  }
+  document.addEventListener('keydown', e => {
+    if (!$('dlg').open) return;
+    if (/^[0-9]$/.test(e.key)) press(e.key);
+    else if (e.key === 'Backspace') press('⌫');
+    else if (e.key === 'Enter') press('✓');
+  });
+  $('cancel').onclick = () => $('dlg').close();
+
+  async function submit() {
+    if (pin.length < 4) { $('err').textContent = 'PIN 至少 4 碼'; return; }
+    busy = true;
+    const { data, error } = await db.rpc('punch', { p_worker_id: cur.id, p_pin: pin });
+    busy = false;
+    if (error) { $('err').textContent = '失敗:' + error.message; return; }
+    if (!data.ok) { pin = ''; drawDots(); $('err').textContent = data.error; return; }
+    $('dlg').close();
+    const r = $('result'); r.className = 'show ' + data.kind;
+    $('rmain').textContent = (data.kind === 'in' ? '上班' : '下班') + '打卡成功';
+    $('rsub').textContent = data.name + ' · ' + new Date(data.at).toLocaleTimeString('zh-TW', { hour12: false })
+      + (data.missed_previous ? ' ⚠ 上次未打下班卡,請通知管理員補登' : '');
+    setTimeout(() => { r.className = ''; loadWorkers(); }, data.missed_previous ? 4500 : 2200);
+  }
+
+  loadWorkers();
+</script>
+</body>
+</html>

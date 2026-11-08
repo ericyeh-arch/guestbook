@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打卡管理後台</title>
+<style>
+  :root{--bg:#f4f6f8;--surface:#fff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--brand:#2563eb;--danger:#dc2626;--ok:#10b981}
+  @media (prefers-color-scheme:dark){:root{--bg:#0b0f14;--surface:#131a22;--text:#e8edf3;--muted:#8a97a8;--line:#222c37}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+  h1{font-size:1.3rem;margin:0} h2{font-size:1.05rem;margin:0 0 12px}
+  .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap}
+  input,select{padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;font:inherit}
+  button{padding:9px 16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font:inherit;cursor:pointer}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  button.del{background:transparent;color:var(--danger);padding:2px 8px;border:1px solid var(--line)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .tabs{display:flex;gap:6px;margin-bottom:16px}
+  .tabs button{background:var(--surface);color:var(--text);border:1px solid var(--line)}
+  .tabs button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600}
+  .tag{padding:1px 10px;border-radius:999px;font-size:.78rem;color:#fff}
+  .tag.in{background:var(--ok)} .tag.out{background:#f59e0b} .tag.off{background:var(--muted)}
+  .msg{color:var(--danger);min-height:1.4em;font-size:.9rem}
+  .scroll{overflow-x:auto} [hidden]{display:none!important}
+  .sum{font-size:1.4rem;font-weight:700}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+  .kpi div{flex:1 1 140px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  .kpi b{display:block;font-size:1.5rem} .kpi span{color:var(--muted);font-size:.82rem}
+  #rangeLabel{font-weight:700;min-width:170px;text-align:center}
+  #mxTbl td:not(:first-child){text-align:center;font-variant-numeric:tabular-nums}
+  #mxTbl th:not(:first-child){text-align:center;white-space:nowrap}
+  #mxTbl tfoot td,#mxTbl tr.total td{font-weight:700;border-top:2px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 登入 -->
+  <div id="login" class="card" style="max-width:380px;margin:60px auto" hidden>
+    <h1 style="margin-bottom:14px">管理員登入</h1>
+    <div class="row"><input id="email" type="email" placeholder="Email" style="width:100%"></div>
+    <div class="row"><input id="pw" type="password" placeholder="密碼" style="width:100%"></div>
+    <button id="loginBtn" style="width:100%">登入</button>
+    <p class="msg" id="loginMsg"></p>
+    <p><a href="index.html" style="color:var(--muted)">← 回打卡頁</a></p>
+  </div>
+
+  <!-- 後台 -->
+  <div id="app" hidden>
+    <div class="top">
+      <h1>⏱ 打卡管理後台</h1>
+      <div class="row" style="margin:0">
+        <a href="index.html" style="color:var(--muted)">打卡頁</a>
+        <button class="ghost" id="logout">登出</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button data-t="report" class="on">工時報表</button>
+      <button data-t="workers">工讀生管理</button>
+    </div>
+
+    <section id="t-report">
+      <div class="card">
+        <div class="row">
+          <select id="mode"><option value="week">週統計</option><option value="month" selected>月統計</option></select>
+          <button id="prev" class="ghost" title="上一期">◀</button>
+          <span id="rangeLabel"></span>
+          <button id="next" class="ghost" title="下一期">▶</button>
+          <input type="week" id="week" hidden>
+          <input type="month" id="month">
+          <button id="thisBtn" class="ghost">本期</button>
+          <select id="wsel"><option value="">全部工讀生</option></select>
+        </div>
+        <div class="kpi" id="kpi"></div>
+        <h2>工時統計</h2>
+        <div class="scroll"><table id="sumTbl"><thead><tr><th>姓名</th><th>出勤天數</th><th>總工時(小時)</th><th>平均每日(小時)</th><th>備註</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="top" style="margin-bottom:8px"><h2 style="margin:0" id="mxTitle">分項統計</h2><button id="csvStat" class="ghost">匯出統計 CSV</button></div>
+        <div class="scroll"><table id="mxTbl"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="top" style="margin-bottom:8px"><h2 style="margin:0">打卡明細</h2><button id="csv" class="ghost">匯出明細 CSV</button></div>
+        <div class="scroll"><table id="logTbl"><thead><tr><th>姓名</th><th>類型</th><th>時間</th><th>IP</th><th></th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="t-workers" hidden>
+      <div class="card">
+        <h2>新增工讀生</h2>
+        <div class="row">
+          <input id="nname" placeholder="姓名" maxlength="30">
+          <input id="npin" placeholder="PIN(4~8 位數字)" inputmode="numeric" maxlength="8">
+          <button id="addBtn">新增</button>
+        </div>
+        <p class="msg" id="wmsg"></p>
+      </div>
+      <div class="card">
+        <h2>工讀生名單</h2>
+        <div class="scroll"><table id="wTbl"><thead><tr><th>姓名</th><th>狀態</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://yhdqsqnbjqznrjcpoeei.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_rVeSI1olnmwCet3IIwgMOg_NInzHB0l';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = id => document.getElementById(id);
+  let workers = [], logRows = [];
+
+  const fmt = d => new Date(d).toLocaleString('zh-TW', { hour12: false });
+  const td = (tr, text) => { const c = document.createElement('td'); c.textContent = text; tr.append(c); return c; };
+
+  // ===== 登入 =====
+  async function boot() {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return showLogin();
+    const { data: ok } = await db.rpc('is_admin');
+    if (!ok) { await db.auth.signOut(); showLogin('此帳號不是管理員'); return; }
+    $('login').hidden = true; $('app').hidden = false;
+    initPeriod();
+    await loadWorkers(); loadReport();
+  }
+  function showLogin(msg = '') { $('app').hidden = true; $('login').hidden = false; $('loginMsg').textContent = msg; }
+  $('loginBtn').onclick = async () => {
+    $('loginMsg').textContent = '';
+    const { error } = await db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pw').value });
+    if (error) { $('loginMsg').textContent = '登入失敗:' + error.message; return; }
+    $('pw').value = ''; boot();
+  };
+  $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+  $('logout').onclick = async () => { await db.auth.signOut(); showLogin(); };
+
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+    $('t-report').hidden = b.dataset.t !== 'report'; $('t-workers').hidden = b.dataset.t !== 'workers';
+  });
+
+  // ===== 工讀生管理 =====
+  async function loadWorkers() {
+    const { data, error } = await db.from('workers').select('id,name,active').order('name');
+    if (error) { $('wmsg').textContent = error.message; return; }
+    workers = data;
+    const sel = $('wsel'), keep = sel.value; sel.length = 1;
+    for (const w of workers) sel.add(new Option(w.name + (w.active ? '' : '(停用)'), w.id));
+    sel.value = keep;
+    const tb = $('wTbl').tBodies[0]; tb.replaceChildren();
+    for (const w of workers) {
+      const tr = tb.insertRow(); td(tr, w.name);
+      const s = td(tr, ''); const tag = document.createElement('span');
+      tag.className = 'tag ' + (w.active ? 'in' : 'off'); tag.textContent = w.active ? '在職' : '已停用'; s.append(tag);
+      const a = td(tr, '');
+      const b1 = document.createElement('button'); b1.className = 'ghost'; b1.textContent = '重設 PIN';
+      b1.onclick = async () => {
+        const p = prompt(`為「${w.name}」設定新 PIN(4~8 位數字)`); if (!p) return;
+        const { error } = await db.rpc('admin_set_pin', { p_worker_id: w.id, p_pin: p });
+        alert(error ? '失敗:' + error.message : 'PIN 已更新');
+      };
+      const b2 = document.createElement('button'); b2.className = 'ghost'; b2.style.marginLeft = '6px';
+      b2.textContent = w.active ? '停用' : '啟用';
+      b2.onclick = async () => { await db.from('workers').update({ active: !w.active }).eq('id', w.id); loadWorkers(); };
+      a.append(b1, b2);
+    }
+  }
+  $('addBtn').onclick = async () => {
+    $('wmsg').textContent = '';
+    const { error } = await db.rpc('admin_add_worker', { p_name: $('nname').value, p_pin: $('npin').value });
+    if (error) { $('wmsg').textContent = error.message.includes('duplicate') ? '姓名已存在' : error.message; return; }
+    $('nname').value = ''; $('npin').value = ''; loadWorkers();
+  };
+
+  // ===== 報表(週 / 月統計) =====
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const md = d => `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+  const isoWeek = d => {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const y = t.getUTCFullYear();
+    return `${y}-W${pad(Math.ceil(((t - Date.UTC(y, 0, 1)) / 86400000 + 1) / 7))}`;
+  };
+  const weekStart = s => { const [y, w] = s.split('-W').map(Number); return addDays(mondayOf(new Date(y, 0, 4)), (w - 1) * 7); };
+  const DAYS = '一二三四五六日', MAX_MS = 12 * 3600000, hrs = ms => (ms / 3600000).toFixed(2);
+  let statRows = [];
+
+  function initPeriod() {
+    const n = new Date();
+    $('week').value = isoWeek(n); $('month').value = `${n.getFullYear()}-${pad(n.getMonth() + 1)}`; syncMode();
+  }
+  function syncMode() { const w = $('mode').value === 'week'; $('week').hidden = !w; $('month').hidden = w; }
+  function range() {
+    if ($('mode').value === 'week') {
+      const from = weekStart($('week').value);
+      return { from, to: addDays(from, 7), label: `${ymd(from)} ~ ${ymd(addDays(from, 6))}` };
+    }
+    const [y, m] = $('month').value.split('-').map(Number);
+    return { from: new Date(y, m - 1, 1), to: new Date(y, m, 1), label: `${y} 年 ${m} 月` };
+  }
+  function shift(dir) {
+    if ($('mode').value === 'week') $('week').value = isoWeek(addDays(weekStart($('week').value), 7 * dir));
+    else { const [y, m] = $('month').value.split('-').map(Number); const d = new Date(y, m - 1 + dir, 1); $('month').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; }
+    loadReport();
+  }
+  // 週統計:依「日」分項;月統計:依「週(週一起算)」分項
+  function buckets(r, mode) {
+    const out = [];
+    if (mode === 'week') {
+      for (let i = 0; i < 7; i++) { const d = addDays(r.from, i); out.push({ key: ymd(d), label: `週${DAYS[i]} ${md(d)}` }); }
+    } else {
+      for (let m = mondayOf(r.from); m < r.to; m = addDays(m, 7)) {
+        const a = m < r.from ? r.from : m, e = addDays(m, 6), b = e >= r.to ? addDays(r.to, -1) : e;
+        out.push({ key: ymd(m), label: `${md(a)}–${md(b)}` });
+      }
+    }
+    return out;
+  }
+
+  async function loadReport() {
+    const mode = $('mode').value, r = range();
+    $('rangeLabel').textContent = r.label;
+    $('mxTitle').textContent = mode === 'week' ? '每日工時(小時)' : '每週工時(小時,週一起算)';
+    // 前後各多抓 12 小時,避免跨期的班被誤判為漏打
+    let q = db.from('punches').select('id,worker_id,kind,punched_at,ip,manual,note,workers(name)')
+      .gte('punched_at', new Date(r.from - MAX_MS).toISOString())
+      .lt('punched_at', new Date(+r.to + MAX_MS).toISOString())
+      .order('punched_at', { ascending: true });
+    if ($('wsel').value) q = q.eq('worker_id', $('wsel').value);
+    const { data, error } = await q;
+    if (error) { alert('讀取失敗:' + error.message); return; }
+    const inRange = t => t >= r.from && t < r.to;
+    logRows = data.filter(p => inRange(new Date(p.punched_at)));
+
+    // 配對上下班;工時歸屬於「上班那天」
+    const per = {}, missedIds = new Set();
+    const keyOf = t => mode === 'week' ? ymd(t) : ymd(mondayOf(t));
+    for (const p of data) {
+      const o = per[p.worker_id] ??= { name: p.workers?.name ?? '?', ms: 0, days: new Set(), open: null, missed: 0, orphan: 0, working: false, b: {} };
+      const t = new Date(p.punched_at);
+      if (p.kind === 'in') {
+        if (o.open && inRange(o.open.t)) { o.missed++; missedIds.add(o.open.id); }
+        o.open = { id: p.id, t };
+      } else if (o.open) {
+        if (inRange(o.open.t)) {
+          const d = t - o.open.t, k = keyOf(o.open.t);
+          o.ms += d; o.days.add(ymd(o.open.t)); o.b[k] = (o.b[k] || 0) + d;
+        }
+        o.open = null;
+      } else if (inRange(t)) o.orphan++;
+    }
+    for (const o of Object.values(per)) {
+      if (o.open && inRange(o.open.t)) {
+        if (Date.now() - o.open.t > MAX_MS) { o.missed++; missedIds.add(o.open.id); } else o.working = true;
+      }
+    }
+    const list = Object.values(per).filter(o => o.ms || o.missed || o.orphan || o.working).sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+
+    // --- 摘要 KPI ---
+    const totMs = list.reduce((s, o) => s + o.ms, 0), totDays = list.reduce((s, o) => s + o.days.size, 0);
+    const totMissed = list.reduce((s, o) => s + o.missed, 0);
+    $('kpi').replaceChildren();
+    for (const [v, l, bad] of [[hrs(totMs), '總工時(小時)'], [list.length, '出勤人數'], [totDays, '出勤人天'], [totMissed, '漏打下班', totMissed > 0]]) {
+      const d = document.createElement('div'), b = document.createElement('b'), s = document.createElement('span');
+      b.textContent = v; s.textContent = l; if (bad) b.style.color = 'var(--danger)'; d.append(b, s); $('kpi').append(d);
+    }
+
+    // --- 每人統計 ---
+    const st = $('sumTbl').tBodies[0]; st.replaceChildren();
+    for (const o of list) {
+      const tr = st.insertRow(); td(tr, o.name); td(tr, o.days.size + ' 天');
+      td(tr, hrs(o.ms)).className = 'sum';
+      td(tr, o.days.size ? hrs(o.ms / o.days.size) : '—');
+      const note = td(tr, [o.working ? '目前上班中' : '', o.orphan ? `${o.orphan} 筆缺上班卡` : ''].filter(Boolean).join(';') || '—');
+      if (o.missed) {
+        const w = document.createElement('div'); w.style.color = 'var(--danger)';
+        w.textContent = `⚠ ${o.missed} 次漏打下班(未計工時,請補登)`;
+        if (note.textContent === '—') note.textContent = ''; note.append(w);
+      }
+    }
+    if (!list.length) td(st.insertRow(), '此期間無資料').colSpan = 5;
+
+    // --- 分項矩陣(週統計=每日,月統計=每週) ---
+    const bks = buckets(r, mode), head = $('mxTbl').tHead; head.replaceChildren();
+    const hr = head.insertRow();
+    for (const t of ['姓名', ...bks.map(b => b.label), '合計']) { const th = document.createElement('th'); th.textContent = t; hr.append(th); }
+    const mb = $('mxTbl').tBodies[0]; mb.replaceChildren();
+    const max = Math.max(1, ...list.flatMap(o => bks.map(b => o.b[b.key] || 0)));
+    const colTot = bks.map(() => 0);
+    statRows = [['姓名', ...bks.map(b => b.label), '合計(小時)', '出勤天數']];
+    for (const o of list) {
+      const tr = mb.insertRow(); td(tr, o.name);
+      const vals = bks.map((b, i) => {
+        const v = o.b[b.key] || 0; colTot[i] += v;
+        const c = td(tr, v ? hrs(v) : '–');
+        if (v) c.style.background = `rgba(37,99,235,${(0.12 + 0.5 * v / max).toFixed(2)})`;
+        return v;
+      });
+      td(tr, hrs(o.ms)).style.fontWeight = '700';
+      statRows.push([o.name, ...vals.map(hrs), hrs(o.ms), o.days.size]);
+    }
+    if (list.length) {
+      const tr = mb.insertRow(); tr.className = 'total'; td(tr, '合計');
+      for (const v of colTot) td(tr, v ? hrs(v) : '–');
+      td(tr, hrs(totMs));
+      statRows.push(['合計', ...colTot.map(hrs), hrs(totMs), totDays]);
+    } else td(mb.insertRow(), '此期間無資料').colSpan = bks.length + 2;
+
+    // --- 打卡明細 ---
+    const lt = $('logTbl').tBodies[0]; lt.replaceChildren();
+    for (const p of [...logRows].reverse()) {
+      const tr = lt.insertRow(); td(tr, p.workers?.name ?? '?');
+      const k = td(tr, ''); const tag = document.createElement('span');
+      tag.className = 'tag ' + p.kind; tag.textContent = p.kind === 'in' ? '上班' : '下班'; k.append(tag);
+      if (p.manual) { const m = document.createElement('span'); m.className = 'tag off'; m.style.marginLeft = '4px'; m.textContent = '補登'; k.append(m); }
+      if (missedIds.has(p.id)) { const m = document.createElement('span'); m.className = 'tag'; m.style.cssText = 'margin-left:4px;background:var(--danger)'; m.textContent = '漏打下班'; k.append(m); }
+      td(tr, fmt(p.punched_at)); td(tr, p.manual ? (p.note || '管理員補登') : (p.ip || '—'));
+      const d = td(tr, '');
+      if (missedIds.has(p.id)) {
+        const fix = document.createElement('button'); fix.className = 'ghost'; fix.style.marginRight = '6px'; fix.textContent = '補下班';
+        fix.onclick = async () => {
+          const s = prompt(`補登「${p.workers?.name}」${fmt(p.punched_at)} 上班的下班時間\n格式:2026-11-09 17:30`);
+          if (!s) return;
+          const t = new Date(s.trim().replace(' ', 'T'));
+          if (isNaN(t) || t <= new Date(p.punched_at) || t > new Date()) { alert('時間格式錯誤,或早於上班時間、晚於現在'); return; }
+          const { error } = await db.from('punches').insert({ worker_id: p.worker_id, kind: 'out', punched_at: t.toISOString(), manual: true, note: '管理員補登' });
+          if (error) alert('失敗:' + error.message); else loadReport();
+        };
+        d.append(fix);
+      }
+      const b = document.createElement('button'); b.className = 'del'; b.textContent = '刪除';
+      b.onclick = async () => {
+        if (!confirm('確定刪除這筆打卡紀錄?刪除後無法復原。')) return;
+        const { error } = await db.from('punches').delete().eq('id', p.id);
+        if (error) alert(error.message); else loadReport();
+      };
+      d.append(b);
+    }
+    if (!logRows.length) td(lt.insertRow(), '此期間無打卡紀錄').colSpan = 5;
+  }
+
+  $('mode').onchange = () => { syncMode(); loadReport(); };
+  $('week').onchange = loadReport; $('month').onchange = loadReport; $('wsel').onchange = loadReport;
+  $('prev').onclick = () => shift(-1); $('next').onclick = () => shift(1);
+  $('thisBtn').onclick = () => { initPeriod(); loadReport(); };
+
+  function download(name, rows) {
+    const esc = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
+    const blob = new Blob(['﻿' + rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  }
+  const tag4file = () => range().label.replace(/[ ~]+/g, '_').replace(/ /g, '');
+  $('csv').onclick = () => download(`打卡明細_${tag4file()}.csv`,
+    [['姓名', '類型', '時間', 'IP/備註'], ...logRows.map(p => [p.workers?.name, p.kind === 'in' ? '上班' : '下班', fmt(p.punched_at), p.manual ? (p.note || '管理員補登') : p.ip])]);
+  $('csvStat').onclick = () => download(`${$('mode').value === 'week' ? '週' : '月'}統計_${tag4file()}.csv`, statRows);
+
+  boot();
+</script>
+</body>
+</html>
