@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>留言板</title>
+<style>
+  body{font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#f4f5f7;margin:0;color:#222}
+  main{max-width:640px;margin:0 auto;padding:24px 16px}
+  h1{text-align:center}
+  form,.msg{background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px #0001}
+  input,textarea{width:100%;box-sizing:border-box;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:6px;font:inherit}
+  button{background:#3ecf8e;border:0;color:#fff;padding:10px 20px;border-radius:6px;font:inherit;cursor:pointer}
+  button:disabled{opacity:.6}
+  .meta{font-size:.85rem;color:#888;margin-bottom:6px}
+  .msg p{margin:0;white-space:pre-wrap;word-break:break-word}
+  #status{text-align:center;color:#c00}
+</style>
+</head>
+<body>
+<main>
+  <h1>📝 留言板</h1>
+  <form id="form">
+    <input id="name" placeholder="暱稱" maxlength="30" required>
+    <textarea id="content" rows="3" placeholder="想說些什麼?" maxlength="500" required></textarea>
+    <button id="btn" type="submit">送出留言</button>
+  </form>
+  <p id="status"></p>
+  <div id="list"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://yhdqsqnbjqznrjcpoeei.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_rVeSI1olnmwCet3IIwgMOg_NInzHB0l';
+
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = id => document.getElementById(id);
+
+  function render(rows) {
+    $('list').innerHTML = '';
+    for (const m of rows) {
+      const d = document.createElement('div');
+      d.className = 'msg';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = `${m.name} · ${new Date(m.created_at).toLocaleString('zh-TW')}`;
+      const p = document.createElement('p');
+      p.textContent = m.content; // textContent 避免 XSS
+      d.append(meta, p);
+      $('list').append(d);
+    }
+  }
+
+  async function load() {
+    const { data, error } = await db.from('messages')
+      .select('*').order('created_at', { ascending: false }).limit(100);
+    if (error) { $('status').textContent = '讀取失敗:' + error.message; return; }
+    $('status').textContent = '';
+    render(data);
+  }
+
+  $('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('btn').disabled = true;
+    const { error } = await db.from('messages').insert({
+      name: $('name').value.trim(), content: $('content').value.trim()
+    });
+    $('btn').disabled = false;
+    if (error) { $('status').textContent = '送出失敗:' + error.message; return; }
+    $('content').value = '';
+    load();
+  });
+
+  // 即時更新(需在 Dashboard 對 messages 開啟 Realtime,否則只會在送出後刷新)
+  db.channel('messages').on('postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'messages' }, load).subscribe();
+
+  load();
+</script>
+</body>
+</html>
