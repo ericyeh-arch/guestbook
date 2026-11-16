@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>請購系統</title>
+<style>
+  :root {
+    --bg:#f4f6f9; --card:#fff; --text:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --primary:#2563eb; --primary-d:#1d4ed8; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --line:#334155; }
+    input, select { background:#0f172a; color:var(--text); }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  .hidden { display:none !important; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  header .who { font-size:13px; color:var(--muted); }
+  main { max-width:960px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  input, select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px; font-size:15px; font-family:inherit; }
+  input:focus, select:focus { outline:2px solid var(--primary); outline-offset:-1px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+  button { font-family:inherit; font-size:14px; padding:8px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--text); cursor:pointer; }
+  button:hover { border-color:var(--primary); }
+  button.primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+  button.primary:hover { background:var(--primary-d); }
+  button.sm { padding:4px 9px; font-size:12px; }
+  button.danger { color:var(--bad); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .login { max-width:380px; margin:10vh auto 0; }
+  .login h1 { text-align:center; font-size:22px; margin:0 0 16px; }
+  .login .row { margin-bottom:12px; }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; }
+  .tabs button { flex:1; }
+  .tabs button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .msg { font-size:13px; margin-top:10px; min-height:18px; }
+  .msg.err { color:var(--bad); } .msg.ok { color:var(--ok); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .stat b { display:block; font-size:22px; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .stat span { font-size:12px; color:var(--muted); }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .toolbar input { flex:1; min-width:160px; width:auto; }
+  .toolbar select { width:auto; }
+  .tbl-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  td.item { white-space:normal; min-width:120px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; background:var(--line); }
+  .badge.sent { background:#dbeafe; color:#1e40af; } .badge.ok { background:#dcfce7; color:#166534; }
+  .badge.bad { background:#fee2e2; color:#991b1b; } .badge.big { background:#fef3c7; color:#92400e; margin-left:4px; }
+  .actions { display:flex; gap:4px; }
+  .empty { text-align:center; color:var(--muted); padding:28px 0; }
+</style>
+</head>
+<body>
+
+<!-- 登入 / 註冊 -->
+<div id="authView" class="login card hidden">
+  <h1>請購系統</h1>
+  <div class="tabs">
+    <button id="tabLogin" class="on" type="button">登入</button>
+    <button id="tabSignup" type="button">註冊</button>
+  </div>
+  <form id="authForm">
+    <div class="row hidden" id="nameRow"><label for="aName">姓名</label><input id="aName" autocomplete="name"></div>
+    <div class="row"><label for="aEmail">Email</label><input id="aEmail" type="email" required autocomplete="email"></div>
+    <div class="row"><label for="aPw">密碼(至少 6 碼)</label><input id="aPw" type="password" required minlength="6" autocomplete="current-password"></div>
+    <button class="primary" style="width:100%" id="authBtn">登入</button>
+    <div class="msg" id="authMsg"></div>
+  </form>
+</div>
+
+<!-- 主畫面 -->
+<div id="appView" class="hidden">
+  <header>
+    <h1>請購系統</h1>
+    <span class="who" id="who"></span>
+    <button class="sm" id="logoutBtn">登出</button>
+  </header>
+  <main>
+    <div class="stats">
+      <div class="stat"><span>案件數</span><b id="stCount">0</b></div>
+      <div class="stat"><span>總金額</span><b id="stSum">0</b></div>
+      <div class="stat"><span>1 萬元以上(件)</span><b id="stBig">0</b></div>
+      <div class="stat"><span>待處理</span><b id="stPending">0</b></div>
+    </div>
+
+    <div class="card">
+      <h2 id="formTitle">新增請購</h2>
+      <form id="reqForm">
+        <div class="grid">
+          <div><label for="fNo">購案編號</label><input id="fNo" required placeholder="例:A115008072" pattern="[A-Za-z][0-9]+(-[0-9]+)?" title="英文字母開頭加數字,可接 -流水號"></div>
+          <div><label for="fAmt">金額(元)</label><input id="fAmt" type="number" min="0" step="1" required inputmode="numeric"></div>
+          <div><label for="fItem">品名 / 用途</label><input id="fItem" required></div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="primary" id="saveBtn">儲存(待送出)</button>
+          <button type="button" id="cancelEdit" class="hidden">取消編輯</button>
+        </div>
+        <div class="msg" id="reqMsg"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>請購清單</h2>
+      <div class="toolbar">
+        <input id="q" placeholder="搜尋編號或品名">
+        <select id="fAmtFilter">
+          <option value="">全部金額</option>
+          <option value="big">1 萬元以上</option>
+          <option value="small">未滿 1 萬</option>
+        </select>
+        <select id="fStatus">
+          <option value="">全部狀態</option>
+          <option>待送出</option><option>已送出</option><option>已核准</option><option>已駁回</option>
+        </select>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>購案編號</th><th class="num">金額</th><th>品名 / 用途</th><th>送出日期</th><th>狀態</th>
+            <th class="admin-col hidden">申請人</th><th></th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="empty">沒有資料</div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://yhdqsqnbjqznrjcpoeei.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_rVeSI1olnmwCet3IIwgMOg_NInzHB0l';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const BIG = 10000;
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = n => Number(n).toLocaleString('en-US');
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const md = s => s ? s.slice(5).replace('-','/') : '—';
+
+  let me = null, profile = null, data = [], editingId = null, signupMode = false;
+
+  function msg(el, text, type) { el.textContent = text || ''; el.className = 'msg ' + (type || ''); }
+
+  // ---------- 驗證 ----------
+  function setMode(signup) {
+    signupMode = signup;
+    $('tabLogin').classList.toggle('on', !signup);
+    $('tabSignup').classList.toggle('on', signup);
+    $('nameRow').classList.toggle('hidden', !signup);
+    $('authBtn').textContent = signup ? '註冊' : '登入';
+    $('aPw').autocomplete = signup ? 'new-password' : 'current-password';
+    msg($('authMsg'));
+  }
+  $('tabLogin').onclick = () => setMode(false);
+  $('tabSignup').onclick = () => setMode(true);
+
+  $('authForm').onsubmit = async e => {
+    e.preventDefault();
+    const email = $('aEmail').value.trim(), password = $('aPw').value;
+    $('authBtn').disabled = true; msg($('authMsg'));
+    try {
+      if (signupMode) {
+        const { data: d, error } = await db.auth.signUp({ email, password, options: { data: { name: $('aName').value.trim() } } });
+        if (error) throw error;
+        if (!d.session) msg($('authMsg'), '註冊成功,請到信箱收驗證信後再登入', 'ok');
+      } else {
+        const { error } = await db.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (err) {
+      msg($('authMsg'), err.message === 'Invalid login credentials' ? '帳號或密碼錯誤' : err.message, 'err');
+    }
+    $('authBtn').disabled = false;
+  };
+
+  $('logoutBtn').onclick = () => db.auth.signOut();
+
+  db.auth.onAuthStateChange((_ev, session) => {
+    // 回呼內不可直接 await supabase 呼叫,用 setTimeout 避開死鎖
+    setTimeout(() => session ? enter(session.user) : leave(), 0);
+  });
+
+  async function enter(user) {
+    me = user;
+    const { data: p } = await db.from('profiles').select('name, role').eq('id', user.id).single();
+    profile = p || { name: user.email, role: 'user' };
+    $('who').textContent = `${profile.name}${profile.role === 'admin' ? '(管理員)' : ''}`;
+    document.querySelectorAll('.admin-col').forEach(el => el.classList.toggle('hidden', profile.role !== 'admin'));
+    $('authView').classList.add('hidden');
+    $('appView').classList.remove('hidden');
+    await load();
+  }
+  function leave() {
+    me = profile = null; data = [];
+    $('appView').classList.add('hidden');
+    $('authView').classList.remove('hidden');
+    $('authForm').reset();
+  }
+
+  // ---------- 資料 ----------
+  async function load() {
+    const { data: rows, error } = await db.from('purchase_requests')
+      .select('*, profiles(name)').order('created_at', { ascending: false });
+    if (error) { alert('讀取失敗:' + error.message); return; }
+    data = rows; render();
+  }
+
+  function filtered() {
+    const q = $('q').value.trim().toLowerCase(), a = $('fAmtFilter').value, s = $('fStatus').value;
+    return data.filter(r =>
+      (!q || r.case_no.toLowerCase().includes(q) || r.item.toLowerCase().includes(q)) &&
+      (!a || (a === 'big' ? r.amount >= BIG : r.amount < BIG)) &&
+      (!s || r.status === s));
+  }
+
+  function render() {
+    const admin = profile?.role === 'admin';
+    $('stCount').textContent = data.length;
+    $('stSum').textContent = fmt(data.reduce((t, r) => t + Number(r.amount), 0));
+    $('stBig').textContent = data.filter(r => r.amount >= BIG).length;
+    $('stPending').textContent = data.filter(r => r.status === (admin ? '已送出' : '待送出')).length;
+
+    const list = filtered();
+    $('empty').classList.toggle('hidden', list.length > 0);
+    $('rows').innerHTML = list.map(r => {
+      const cls = { '已送出':'sent', '已核准':'ok', '已駁回':'bad' }[r.status] || '';
+      const mine = r.created_by === me.id;
+      const acts = [];
+      if (mine && (r.status === '待送出' || r.status === '已駁回')) {
+        acts.push(`<button class="sm primary" data-a="send" data-id="${r.id}">送出</button>`);
+        acts.push(`<button class="sm" data-a="edit" data-id="${r.id}">編輯</button>`);
+      }
+      if (admin && r.status === '已送出') {
+        acts.push(`<button class="sm primary" data-a="approve" data-id="${r.id}">核准</button>`);
+        acts.push(`<button class="sm danger" data-a="reject" data-id="${r.id}">駁回</button>`);
+      }
+      if ((mine && r.status === '待送出') || admin)
+        acts.push(`<button class="sm danger" data-a="del" data-id="${r.id}">刪除</button>`);
+      return `<tr>
+        <td>${esc(r.case_no)}</td>
+        <td class="num">${fmt(r.amount)}${r.amount >= BIG ? '<span class="badge big">1萬+</span>' : ''}</td>
+        <td class="item">${esc(r.item)}</td>
+        <td>${md(r.sent_date)}</td>
+        <td><span class="badge ${cls}">${r.status}</span></td>
+        ${admin ? `<td>${esc(r.profiles?.name)}</td>` : ''}
+        <td><div class="actions">${acts.join('')}</div></td></tr>`;
+    }).join('');
+  }
+
+  ['q','fAmtFilter','fStatus'].forEach(id => $(id).addEventListener('input', render));
+
+  // ---------- 新增 / 編輯 ----------
+  function resetForm() {
+    editingId = null; $('reqForm').reset();
+    $('formTitle').textContent = '新增請購';
+    $('cancelEdit').classList.add('hidden');
+  }
+  $('cancelEdit').onclick = resetForm;
+
+  $('reqForm').onsubmit = async e => {
+    e.preventDefault();
+    const row = { case_no: $('fNo').value.trim().toUpperCase(), amount: Number($('fAmt').value), item: $('fItem').value.trim() };
+    $('saveBtn').disabled = true; msg($('reqMsg'));
+    const { error } = editingId
+      ? await db.from('purchase_requests').update(row).eq('id', editingId)
+      : await db.from('purchase_requests').insert(row);
+    $('saveBtn').disabled = false;
+    if (error) return msg($('reqMsg'), error.code === '23505' ? '此購案編號已存在' : error.message, 'err');
+    msg($('reqMsg'), editingId ? '已更新' : '已新增', 'ok');
+    resetForm(); load();
+  };
+
+  // ---------- 列表操作 ----------
+  $('rows').onclick = async e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const id = Number(b.dataset.id), r = data.find(x => x.id === id), a = b.dataset.a;
+    let error;
+    if (a === 'edit') {
+      editingId = id;
+      $('fNo').value = r.case_no; $('fAmt').value = r.amount; $('fItem').value = r.item;
+      $('formTitle').textContent = '編輯請購:' + r.case_no;
+      $('cancelEdit').classList.remove('hidden');
+      return window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (a === 'del') {
+      if (!confirm(`確定刪除 ${r.case_no}?`)) return;
+      ({ error } = await db.from('purchase_requests').delete().eq('id', id));
+    } else {
+      const patch = {
+        send:    { status: '已送出', sent_date: today() },
+        approve: { status: '已核准' },
+        reject:  { status: '已駁回' },
+      }[a];
+      ({ error } = await db.from('purchase_requests').update(patch).eq('id', id));
+    }
+    if (error) return alert('操作失敗:' + error.message);
+    load();
+  };
+
+  // 啟動:還原既有 session
+  db.auth.getSession().then(({ data }) => { if (!data.session) leave(); });
+</script>
+</body>
+</html>
