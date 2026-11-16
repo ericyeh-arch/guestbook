@@ -1,5 +1,5 @@
 -- 請購系統 schema(貼到 Supabase SQL Editor 執行)
--- 另需:Authentication → Providers → Email 啟用;測試期可關閉 "Confirm email"
+-- 另需:Authentication → Providers → Email 啟用,並關閉 "Allow new users to sign up"(帳號由管理員建立)
 
 -- 使用者資料(對應 auth.users)
 create table if not exists public.profiles (

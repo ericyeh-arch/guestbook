@@ -66,16 +66,12 @@
 <!-- 登入 / 註冊 -->
 <div id="authView" class="login card hidden">
   <h1>請購系統</h1>
-  <div class="tabs">
-    <button id="tabLogin" class="on" type="button">登入</button>
-    <button id="tabSignup" type="button">註冊</button>
-  </div>
   <form id="authForm">
-    <div class="row hidden" id="nameRow"><label for="aName">姓名</label><input id="aName" autocomplete="name"></div>
     <div class="row"><label for="aEmail">Email</label><input id="aEmail" type="email" required autocomplete="email"></div>
-    <div class="row"><label for="aPw">密碼(至少 6 碼)</label><input id="aPw" type="password" required minlength="6" autocomplete="current-password"></div>
+    <div class="row"><label for="aPw">密碼</label><input id="aPw" type="password" required autocomplete="current-password"></div>
     <button class="primary" style="width:100%" id="authBtn">登入</button>
     <div class="msg" id="authMsg"></div>
+    <div class="msg">沒有帳號請洽管理員建立</div>
   </form>
 </div>
 
@@ -150,36 +146,18 @@
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const md = s => s ? s.slice(5).replace('-','/') : '—';
 
-  let me = null, profile = null, data = [], editingId = null, signupMode = false;
+  let me = null, profile = null, data = [], editingId = null;
 
   function msg(el, text, type) { el.textContent = text || ''; el.className = 'msg ' + (type || ''); }
 
-  // ---------- 驗證 ----------
-  function setMode(signup) {
-    signupMode = signup;
-    $('tabLogin').classList.toggle('on', !signup);
-    $('tabSignup').classList.toggle('on', signup);
-    $('nameRow').classList.toggle('hidden', !signup);
-    $('authBtn').textContent = signup ? '註冊' : '登入';
-    $('aPw').autocomplete = signup ? 'new-password' : 'current-password';
-    msg($('authMsg'));
-  }
-  $('tabLogin').onclick = () => setMode(false);
-  $('tabSignup').onclick = () => setMode(true);
-
+  // ---------- 登入(帳號由管理員在 Supabase 建立) ----------
   $('authForm').onsubmit = async e => {
     e.preventDefault();
     const email = $('aEmail').value.trim(), password = $('aPw').value;
     $('authBtn').disabled = true; msg($('authMsg'));
     try {
-      if (signupMode) {
-        const { data: d, error } = await db.auth.signUp({ email, password, options: { data: { name: $('aName').value.trim() } } });
-        if (error) throw error;
-        if (!d.session) msg($('authMsg'), '註冊成功,請到信箱收驗證信後再登入', 'ok');
-      } else {
-        const { error } = await db.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
+      const { error } = await db.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err) {
       msg($('authMsg'), err.message === 'Invalid login credentials' ? '帳號或密碼錯誤' : err.message, 'err');
     }
