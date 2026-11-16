@@ -58,6 +58,9 @@
   .badge.sent { background:#dbeafe; color:#1e40af; } .badge.ok { background:#dcfce7; color:#166534; }
   .badge.bad { background:#fee2e2; color:#991b1b; } .badge.big { background:#fef3c7; color:#92400e; margin-left:4px; }
   .actions { display:flex; gap:4px; }
+  dialog { border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); padding:20px; width:min(360px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  dialog .row { margin-bottom:12px; }
   .empty { text-align:center; color:var(--muted); padding:28px 0; }
 </style>
 </head>
@@ -80,6 +83,7 @@
   <header>
     <h1>請購系統</h1>
     <span class="who" id="who"></span>
+    <button class="sm" id="pwBtn">修改密碼</button>
     <button class="sm" id="logoutBtn">登出</button>
   </header>
   <main>
@@ -134,6 +138,20 @@
   </main>
 </div>
 
+<dialog id="pwDlg">
+  <h2>修改密碼</h2>
+  <form id="pwForm">
+    <div class="row"><label for="pOld">目前密碼</label><input id="pOld" type="password" required autocomplete="current-password"></div>
+    <div class="row"><label for="pNew">新密碼(至少 8 碼)</label><input id="pNew" type="password" required minlength="8" autocomplete="new-password"></div>
+    <div class="row"><label for="pNew2">再輸入一次新密碼</label><input id="pNew2" type="password" required minlength="8" autocomplete="new-password"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" id="pCancel">取消</button>
+      <button class="primary" id="pSave">更新密碼</button>
+    </div>
+    <div class="msg" id="pMsg"></div>
+  </form>
+</dialog>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
   const SUPABASE_URL = 'https://yhdqsqnbjqznrjcpoeei.supabase.co';
@@ -165,6 +183,25 @@
   };
 
   $('logoutBtn').onclick = () => db.auth.signOut();
+
+  // ---------- 修改密碼 ----------
+  $('pwBtn').onclick = () => { $('pwForm').reset(); msg($('pMsg')); $('pwDlg').showModal(); };
+  $('pCancel').onclick = () => $('pwDlg').close();
+  $('pwForm').onsubmit = async e => {
+    e.preventDefault();
+    const oldPw = $('pOld').value, newPw = $('pNew').value;
+    if (newPw !== $('pNew2').value) return msg($('pMsg'), '兩次輸入的新密碼不一致', 'err');
+    if (newPw === oldPw) return msg($('pMsg'), '新密碼不能與目前密碼相同', 'err');
+    $('pSave').disabled = true; msg($('pMsg'));
+    // 先用目前密碼重新驗證,避免他人趁離座時改密碼
+    const { error: e1 } = await db.auth.signInWithPassword({ email: me.email, password: oldPw });
+    if (e1) { $('pSave').disabled = false; return msg($('pMsg'), '目前密碼錯誤', 'err'); }
+    const { error: e2 } = await db.auth.updateUser({ password: newPw });
+    $('pSave').disabled = false;
+    if (e2) return msg($('pMsg'), e2.message, 'err');
+    msg($('pMsg'), '密碼已更新', 'ok');
+    setTimeout(() => $('pwDlg').close(), 1200);
+  };
 
   db.auth.onAuthStateChange((_ev, session) => {
     // 回呼內不可直接 await supabase 呼叫,用 setTimeout 避開死鎖
