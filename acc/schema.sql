@@ -75,3 +75,8 @@ create policy pr_delete_own on public.purchase_requests for delete
 -- 設定管理員(把 email 換成你的):
 -- update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'you@example.com');
+
+-- 表的存取權限(此專案不會自動授權給 authenticated;實際資料範圍由上面的 RLS 控制)
+grant usage on schema public to authenticated;
+grant select on public.profiles to authenticated;
+grant select, insert, update, delete on public.purchase_requests to authenticated;
