@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>請購帳務管理</title>
+<style>
+  :root { --bg:#f4f6f9; --card:#fff; --text:#1f2937; --muted:#6b7280; --line:#e5e7eb; --primary:#2563eb; --primary-d:#1d4ed8; --ok:#16a34a; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --line:#334155; }
+    input, select, textarea { background:#0f172a; color:var(--text); }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  .hidden { display:none !important; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  header .who { font-size:13px; color:var(--muted); }
+  main { max-width:1200px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  input, select, textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:15px; font-family:inherit; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--primary); outline-offset:-1px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .grid .wide { grid-column:1/-1; }
+  button { font-family:inherit; font-size:14px; padding:8px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--text); cursor:pointer; }
+  button:hover { border-color:var(--primary); }
+  button.primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+  button.primary:hover { background:var(--primary-d); }
+  button.sm { padding:4px 9px; font-size:12px; }
+  button.danger { color:var(--bad); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .login { max-width:380px; margin:10vh auto 0; }
+  .login h1 { text-align:center; font-size:22px; margin:0 0 16px; }
+  .login .row { margin-bottom:12px; }
+  .msg { font-size:13px; margin-top:10px; min-height:18px; }
+  .msg.err { color:var(--bad); } .msg.ok { color:var(--ok); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .stat b { display:block; font-size:22px; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .stat span { font-size:12px; color:var(--muted); }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+  .toolbar input { flex:1; min-width:160px; width:auto; }
+  .toolbar select { width:auto; }
+  .tbl-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  td.item { white-space:normal; min-width:200px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; background:var(--line); }
+  .badge.ok { background:#dcfce7; color:#166534; } .badge.wait { background:#fef3c7; color:#92400e; }
+  .actions { display:flex; gap:4px; }
+  dialog { border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--text); padding:20px; width:min(720px,94vw); max-height:92vh; overflow:auto; }
+  dialog.small { width:min(360px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  dialog .row { margin-bottom:12px; }
+  .empty { text-align:center; color:var(--muted); padding:28px 0; }
+</style>
+</head>
+<body>
+
+<div id="authView" class="login card hidden">
+  <h1>請購帳務管理</h1>
+  <form id="authForm">
+    <div class="row"><label for="aEmail">Email</label><input id="aEmail" type="email" required autocomplete="email"></div>
+    <div class="row"><label for="aPw">密碼</label><input id="aPw" type="password" required autocomplete="current-password"></div>
+    <button class="primary" style="width:100%" id="authBtn">登入</button>
+    <div class="msg" id="authMsg"></div>
+    <div class="msg">沒有帳號請洽管理員建立</div>
+  </form>
+</div>
+
+<div id="appView" class="hidden">
+  <header>
+    <h1>請購帳務管理</h1>
+    <span class="who" id="who"></span>
+    <button class="sm" id="logoutBtn">登出</button>
+  </header>
+  <main>
+    <div class="stats">
+      <div class="stat"><span>案件數</span><b id="stCount">0</b></div>
+      <div class="stat"><span>採購總金額</span><b id="stSum">0</b></div>
+      <div class="stat"><span>已審</span><b id="stDone">0</b></div>
+      <div class="stat"><span>未審</span><b id="stWait">0</b></div>
+    </div>
+
+    <div class="card">
+      <h2>請購清單</h2>
+      <div class="toolbar">
+        <input id="q" placeholder="搜尋購案編號、採購原因、承辦人、傳票號">
+        <select id="fProg"><option value="">全部進度</option><option>未審</option><option>已審</option></select>
+        <select id="fYear"><option value="">全部年度</option></select>
+        <button class="primary" id="addBtn">＋ 新增</button>
+        <button id="importBtn">匯入 Excel</button>
+        <button id="exportBtn">匯出 CSV</button>
+        <input type="file" id="file" accept=".xlsx,.xls" class="hidden">
+      </div>
+      <div class="msg" id="listMsg"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>年度</th><th>購案編號</th><th>承辦人</th><th>請購方式</th><th>蓋章日期</th><th>預計核銷</th>
+            <th class="num">採購總金額</th><th>採購原因</th><th>進度</th><th>傳票號</th><th></th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="empty">沒有資料</div>
+    </div>
+  </main>
+</div>
+
+<!-- 新增 / 編輯 -->
+<dialog id="dlg">
+  <h2 id="dlgTitle">新增請購</h2>
+  <form id="form">
+    <div class="grid" id="fields"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button type="button" id="dCancel">取消</button>
+      <button class="primary" id="dSave">儲存</button>
+    </div>
+    <div class="msg" id="dMsg"></div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://yhdqsqnbjqznrjcpoeei.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_rVeSI1olnmwCet3IIwgMOg_NInzHB0l';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const TABLE = 'acc_ledger';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = n => Number(n || 0).toLocaleString('en-US');
+  const msg = (el, text, type) => { el.textContent = text || ''; el.className = 'msg ' + (type || ''); };
+
+  // 欄位定義:key=資料表欄位, label=Excel 表頭, t=型別
+  const FIELDS = [
+    { key:'year',          label:'請購年度',         t:'int' },
+    { key:'handler',       label:'承辦人',           t:'text' },
+    { key:'method',        label:'請購方式',         t:'text' },
+    { key:'case_no',       label:'購案編號',         t:'text', req:true },
+    { key:'amount',        label:'採購總金額',       t:'int', req:true },
+    { key:'category',      label:'購案類別',         t:'text' },
+    { key:'provided_date', label:'請購提供日期',     t:'text', ph:'民國 7 碼,如 1151102' },
+    { key:'stamp_date',    label:'請購或蓋章日期',   t:'text', ph:'1151102' },
+    { key:'expect_date',   label:'預計核銷日期',     t:'text', ph:'1151130' },
+    { key:'plan_no',       label:'計畫編號',         t:'text' },
+    { key:'fund_use',      label:'經費用途',         t:'text' },
+    { key:'progress',      label:'請購進度',         t:'sel', opts:['未審','已審'] },
+    { key:'audit_date',    label:'主計室購案審核日期', t:'text' },
+    { key:'invoice_date',  label:'發票日期',         t:'text' },
+    { key:'paid_date',     label:'核銷(蓋章)日期',   t:'text' },
+    { key:'voucher_no',    label:'傳票號',           t:'text' },
+    { key:'reason',        label:'採購原因',         t:'area', wide:true },
+    { key:'note',          label:'備註',             t:'area', wide:true },
+  ];
+
+  $('fields').innerHTML = FIELDS.map(f => {
+    const id = 'f_' + f.key, r = f.req ? ' required' : '';
+    const input = f.t === 'sel' ? `<select id="${id}">${f.opts.map(o => `<option>${o}</option>`).join('')}</select>`
+      : f.t === 'area' ? `<textarea id="${id}" rows="2"></textarea>`
+      : f.t === 'int' ? `<input id="${id}" type="number" min="0" step="1" inputmode="numeric"${r}>`
+      : `<input id="${id}" placeholder="${f.ph || ''}"${r}>`;
+    return `<div class="${f.wide ? 'wide' : ''}"><label for="${id}">${f.label}${f.req ? ' *' : ''}</label>${input}</div>`;
+  }).join('');
+
+  let me = null, profile = null, data = [], editingId = null;
+
+  // ---------- 登入 ----------
+  $('authForm').onsubmit = async e => {
+    e.preventDefault();
+    $('authBtn').disabled = true; msg($('authMsg'));
+    const { error } = await db.auth.signInWithPassword({ email: $('aEmail').value.trim(), password: $('aPw').value });
+    if (error) msg($('authMsg'), error.message === 'Invalid login credentials' ? '帳號或密碼錯誤' : error.message, 'err');
+    $('authBtn').disabled = false;
+  };
+  $('logoutBtn').onclick = () => db.auth.signOut();
+
+  db.auth.onAuthStateChange((_ev, session) => { setTimeout(() => session ? enter(session.user) : leave(), 0); });
+
+  async function enter(user) {
+    me = user;
+    const { data: p } = await db.from('profiles').select('name, role').eq('id', user.id).single();
+    profile = p || { name: user.email, role: 'user' };
+    $('who').textContent = `${profile.name}${profile.role === 'admin' ? '(管理員)' : ''}`;
+    $('authView').classList.add('hidden'); $('appView').classList.remove('hidden');
+    await load();
+  }
+  function leave() {
+    me = profile = null; data = [];
+    $('appView').classList.add('hidden'); $('authView').classList.remove('hidden'); $('authForm').reset();
+  }
+
+  // ---------- Read ----------
+  async function load() {
+    const { data: rows, error } = await db.from(TABLE).select('*')
+      .order('year', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
+    if (error) return msg($('listMsg'), '讀取失敗:' + error.message, 'err');
+    data = rows;
+    const years = [...new Set(data.map(r => r.year).filter(v => v != null))].sort((a, b) => b - a);
+    const cur = $('fYear').value;
+    $('fYear').innerHTML = '<option value="">全部年度</option>' + years.map(y => `<option>${y}</option>`).join('');
+    $('fYear').value = years.map(String).includes(cur) ? cur : '';
+    render();
+  }
+
+  function filtered() {
+    const q = $('q').value.trim().toLowerCase(), p = $('fProg').value, y = $('fYear').value;
+    return data.filter(r =>
+      (!q || [r.case_no, r.reason, r.handler, r.voucher_no, r.note].some(v => (v || '').toLowerCase().includes(q))) &&
+      (!p || r.progress === p) && (!y || String(r.year) === y));
+  }
+
+  function render() {
+    const list = filtered();
+    $('stCount').textContent = list.length;
+    $('stSum').textContent = fmt(list.reduce((t, r) => t + Number(r.amount), 0));
+    $('stDone').textContent = list.filter(r => r.progress === '已審').length;
+    $('stWait').textContent = list.filter(r => r.progress === '未審').length;
+    $('empty').classList.toggle('hidden', list.length > 0);
+    $('rows').innerHTML = list.map(r => `<tr>
+      <td>${esc(r.year)}</td><td>${esc(r.case_no)}</td><td>${esc(r.handler)}</td><td>${esc(r.method)}</td>
+      <td>${esc(r.stamp_date)}</td><td>${esc(r.expect_date)}</td>
+      <td class="num">${fmt(r.amount)}</td><td class="item">${esc(r.reason)}</td>
+      <td><span class="badge ${r.progress === '已審' ? 'ok' : 'wait'}">${esc(r.progress)}</span></td>
+      <td>${esc(r.voucher_no)}</td>
+      <td><div class="actions">
+        <button class="sm" data-a="edit" data-id="${r.id}">編輯</button>
+        <button class="sm danger" data-a="del" data-id="${r.id}">刪除</button></div></td></tr>`).join('');
+  }
+  ['q', 'fProg', 'fYear'].forEach(id => $(id).addEventListener('input', render));
+
+  // ---------- Create / Update ----------
+  function openForm(r) {
+    editingId = r ? r.id : null;
+    $('dlgTitle').textContent = r ? '編輯:' + r.case_no : '新增請購';
+    FIELDS.forEach(f => { $('f_' + f.key).value = r ? (r[f.key] ?? '') : (f.key === 'progress' ? '未審' : ''); });
+    if (!r) { $('f_year').value = new Date().getFullYear() - 1911; $('f_handler').value = profile?.name || ''; }
+    msg($('dMsg')); $('dlg').showModal();
+  }
+  $('addBtn').onclick = () => openForm(null);
+  $('dCancel').onclick = () => $('dlg').close();
+
+  $('form').onsubmit = async e => {
+    e.preventDefault();
+    const row = {};
+    FIELDS.forEach(f => {
+      const v = $('f_' + f.key).value.trim();
+      row[f.key] = f.t === 'int' ? (v === '' ? (f.req ? 0 : null) : Number(v)) : (v === '' && !f.req && f.key !== 'reason' && f.key !== 'handler' && f.key !== 'method' ? null : v);
+    });
+    row.case_no = row.case_no.toUpperCase();
+    $('dSave').disabled = true; msg($('dMsg'));
+    const { error } = editingId
+      ? await db.from(TABLE).update(row).eq('id', editingId)
+      : await db.from(TABLE).insert(row);
+    $('dSave').disabled = false;
+    if (error) return msg($('dMsg'), error.code === '23505' ? '此購案編號已存在' : error.message, 'err');
+    $('dlg').close(); msg($('listMsg'), editingId ? '已更新' : '已新增', 'ok'); load();
+  };
+
+  // ---------- Delete / 列表按鈕 ----------
+  $('rows').onclick = async e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const id = Number(b.dataset.id), r = data.find(x => x.id === id);
+    if (b.dataset.a === 'edit') return openForm(r);
+    if (!confirm(`確定刪除 ${r.case_no}?`)) return;
+    const { error } = await db.from(TABLE).delete().eq('id', id);
+    if (error) return msg($('listMsg'), '刪除失敗:' + error.message, 'err');
+    msg($('listMsg'), '已刪除', 'ok'); load();
+  };
+
+  // ---------- 匯入 Excel(依表頭名稱對應;購案編號已存在者更新,否則新增) ----------
+  $('importBtn').onclick = () => $('file').click();
+  $('file').onchange = async e => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    try {
+      const wb = XLSX.read(await file.arrayBuffer());
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+      const byLabel = Object.fromEntries(FIELDS.map(f => [f.label, f]));
+      const out = [];
+      for (const r of rows) {
+        const o = {};
+        for (const [k, v] of Object.entries(r)) {
+          const f = byLabel[k.trim()]; if (!f || v == null || v === '') continue;
+          o[f.key] = f.t === 'int' ? Math.round(Number(v)) : String(typeof v === 'number' ? Math.round(v) : v).trim();
+        }
+        if (!o.case_no) continue;
+        o.case_no = o.case_no.toUpperCase();
+        out.push(o);
+      }
+      if (!out.length) return msg($('listMsg'), '沒有可匯入的列(需有「購案編號」欄)', 'err');
+      if (!confirm(`將匯入 ${out.length} 筆(購案編號相同者會覆蓋)。繼續?`)) return;
+      // 同一批次欄位需一致,補齊缺漏欄位為預設值
+      const norm = out.map(o => ({ handler:'', method:'', reason:'', progress:'未審', amount:0, ...o }));
+      const { error } = await db.from(TABLE).upsert(norm, { onConflict: 'case_no' });
+      if (error) return msg($('listMsg'), '匯入失敗:' + error.message, 'err');
+      msg($('listMsg'), `已匯入 ${norm.length} 筆`, 'ok'); load();
+    } catch (err) { msg($('listMsg'), '匯入失敗:' + err.message, 'err'); }
+  };
+
+  // ---------- 匯出 CSV(目前篩選結果) ----------
+  $('exportBtn').onclick = () => {
+    const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [FIELDS.map(f => q(f.label)).join(','), ...filtered().map(r => FIELDS.map(f => q(r[f.key])).join(','))].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' }));
+    a.download = 'acc-ledger.csv'; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  db.auth.getSession().then(({ data }) => { if (!data.session) leave(); });
+</script>
+</body>
+</html>
